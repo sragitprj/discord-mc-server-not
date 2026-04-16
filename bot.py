@@ -1,5 +1,3 @@
-import time
-import json
 import os
 import requests
 from mcstatus import JavaServer
@@ -11,8 +9,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 MC_HOST = os.getenv("MC_HOST")
 MC_PORT = int(os.getenv("MC_PORT", "25565"))
 SERVER_NAME = os.getenv("SERVER_NAME", "Minecraft Server")
-MESSAGE_ID_FILE = "message_id.txt"
-UPDATE_INTERVAL = 60
+MESSAGE_ID = os.getenv("MESSAGE_ID")
 
 
 def get_server_status() -> tuple[bool, int]:
@@ -38,46 +35,26 @@ def build_payload(online: bool, player_count: int) -> dict:
                 {"name": "IP", "value": f"`{ip}`", "inline": True},
                 {"name": "Players", "value": str(player_count) if online else "—", "inline": True},
             ],
-            "footer": {"text": "Updates every 60 seconds"},
+            "footer": {"text": "Updates every 5 minutes"},
         }]
     }
 
 
-def load_message_id() -> str | None:
-    if os.path.exists(MESSAGE_ID_FILE):
-        return open(MESSAGE_ID_FILE).read().strip()
-    return None
-
-
-def save_message_id(message_id: str):
-    with open(MESSAGE_ID_FILE, "w") as f:
-        f.write(message_id)
-
-
-def post_or_edit(payload: dict):
-    message_id = load_message_id()
-
-    if message_id:
-        r = requests.patch(f"{WEBHOOK_URL}/messages/{message_id}", json=payload)
-        if r.status_code == 404:
-            message_id = None
-
-    if not message_id:
-        r = requests.post(f"{WEBHOOK_URL}?wait=true", json=payload)
-        r.raise_for_status()
-        save_message_id(r.json()["id"])
-
-
 def main():
-    print(f"Tracking {SERVER_NAME} ({MC_HOST}:{MC_PORT})")
-    while True:
-        try:
-            online, players = get_server_status()
-            post_or_edit(build_payload(online, players))
-            print(f"Updated — {'online' if online else 'offline'}, {players} players")
-        except Exception as e:
-            print(f"Error: {e}")
-        time.sleep(UPDATE_INTERVAL)
+    online, players = get_server_status()
+    payload = build_payload(online, players)
+
+    if MESSAGE_ID:
+        r = requests.patch(f"{WEBHOOK_URL}/messages/{MESSAGE_ID}", json=payload)
+        if r.status_code != 404:
+            r.raise_for_status()
+            print(f"Updated message {MESSAGE_ID} — {'online' if online else 'offline'}, {players} players")
+            return
+
+    r = requests.post(f"{WEBHOOK_URL}?wait=true", json=payload)
+    r.raise_for_status()
+    new_id = r.json()["id"]
+    print(f"Posted new message. Set MESSAGE_ID={new_id} in your GitHub secret.")
 
 
 if __name__ == "__main__":

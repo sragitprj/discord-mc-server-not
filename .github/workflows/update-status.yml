@@ -1,0 +1,26 @@
+name: Update Minecraft Server Status
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - run: python bot.py
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          MC_HOST: ${{ secrets.MC_HOST }}
+          MC_PORT: ${{ secrets.MC_PORT }}
+          SERVER_NAME: ${{ secrets.SERVER_NAME }}
+          MESSAGE_ID: ${{ secrets.MESSAGE_ID }}
